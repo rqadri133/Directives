@@ -1,0 +1,281 @@
+
+app.directive('donutChart', ['$rootScope', '$document', function ($rootScope, $document) {
+    function link(scope, el) {
+        var data = scope.data
+
+        /*** this above scope .data will be coming web api or service ***/
+
+
+        var color = d3.scale.category10()
+        var el = el[0];
+        var width = el.clientWidth
+        var height = el.clientHeight
+
+        var min = Math.min(width, height)
+        var pie = d3.layout.pie().sort(null)
+        var arc = d3.svg.arc()
+                  .outerRadius(min / 2 * 0.9)
+                  .innerRadius(min / 2 * 0.5)
+        var svg = d3.select(el).append('svg')
+
+        var g = svg.append('g')
+
+        var arcs = g.selectAll('path')
+
+
+        scope.$watch(function () {
+            return el.clientWidth + el.clientHeight
+        }, function () {
+            width = el.clientWidth
+            height = el.clientHeight
+            min = Math.min(width, height)
+            arc.outerRadius(min / 2 * 0.9).innerRadius(min / 2 * 0.5)
+            svg.attr({ width: width, height: height })
+            g.attr('transform', 'translate(' + width / 2 + ',' + height / 2 + ')')
+            arcs.attr('d', arc)
+
+        })
+
+
+        /* this watch is providing data updates please remeber it not a by default 
+        angular directive u are engineering this directive so this doesn't 
+        know any thing about update  
+        http://stackoverflow.com/questions/6746598/what-is-start-angle-and-end-angle-of-arc-in-html5-canvas
+        */
+        scope.$watch('data', function (data) {
+            var duration = 1000
+            arcs = arcs.data(pie(data))
+            arcs.transition()
+               .duration(duration)
+                .attrTween('d', arcTransUpdate)
+            arcs.enter()
+                   .append('path')
+                   .style('stroke', 'white')
+                   .attr('fill', function (d, i) { return color(i) })
+                    .each(function (d) {
+                        this._current = { startAngle: d.startAngle * Math.PI - 0.001, endAngle: d.startAngle + d.endAngle + 1.5 * Math.PI }
+                    })
+                    .transition().duration(duration).attrTween('d', arcTransUpdate)
+            arcs.exit()
+        })
+
+
+
+        /** Any data change will update this directive this watch is for change for responsive data ***/
+
+        function arcTransUpdate(a) {
+            /* interpolate is used to blend data **/
+            var i = d3.interpolate(this._current, a);
+            this._current = i(0);
+            return function (t) {
+                return arc(i(t));
+            };
+        }
+
+
+    }
+
+    return {
+        link: link,
+        restrict: 'E',
+        scope: { data: '=' }
+
+    }
+
+
+
+
+}]);
+
+
+
+app.directive('barChart', ['$rootScope', '$document', function ($rootScope, $document) {
+    function link(scope, el) {
+        var data = d3.csv.parse(scope.data);
+        var _color = scope.color;
+        var valueLabelWidth = 40
+        var barHeight = 20
+        var barLabelWidth = 100 // space reserved for bar labels
+        var barLabelPadding = 5 // padding between bar and bar labels (left)
+        var gridLabelHeight = 18 // space reserved for gridline labels
+        var gridChartOffset = 3 // space between start of grid and first bar
+        var maxBarWidth = 200 // width of the bar with the max value
+        var el = el[0];
+        var width = el.clientWidth
+        var height = el.clientHeight
+
+        var min = Math.min(width, height)
+
+        var svg = d3.select(el).append('svg')
+        var aggregatedData = null;
+
+
+
+        var barLabel = function (d) { return d.key; };
+        var barValue = function (d) { return d.values.value; };
+
+        // scales
+        var yScale = null;
+        var y = null;
+        var yText = null;
+        var x = null;
+
+        // svg container element
+
+
+        var chart = null;
+
+        var gridContainer = null;
+
+        var barsContainer = null;
+        var labelsContainer = null;
+        var textcontainer = null;
+
+        var barsContainer = null;
+        var labelsContainer = null;
+        var textcontainer = null;
+
+
+        scope.$watch(function () {
+            return el.clientWidth + el.clientHeight
+        }, function () {
+            width = el.clientWidth
+            height = el.clientHeight
+            min = Math.min(width, height)
+
+            // bar labels
+
+
+        })
+
+        scope.$watch('data', function (data) {
+            var duration = 1000
+            data = d3.csv.parse(data);
+            aggregatedData = null;
+            barValue = null;
+            barLabel = null;
+            yScale = null;
+            y = null;
+            x = null;
+            yText = null;
+            chart = null;
+            gridContainer = null;
+            
+            var g = svg.selectAll('g');
+            var childg = g[0];
+            var i = 0;
+            var nchild = angular.element(el).find('svg')[0];
+            var allNodes = angular.element(nchild)[0];
+
+            if (allNodes.childNodes != null) {
+                while(allNodes.childNodes.length !=0)
+                {
+                
+                        allNodes.removeChild(allNodes.childNodes[0]);
+                      
+                 }
+         
+
+            }
+
+
+            aggregatedData = d3.nest()
+           .key(function (d) { return d['Name']; })
+           .rollup(function (d) {
+               return {
+                   'value': d3.sum(d, function (e) { return parseFloat(e['Average Life Expectancy']); })
+               };
+           }).entries(data);
+
+            barLabel = function (d) { return d.key; };
+            barValue = function (d) { return d.values.value; };
+
+            // scales
+            yScale = d3.scale.ordinal().domain(d3.range(0, aggregatedData.length)).rangeBands([0, aggregatedData.length * barHeight]);
+
+            y = function (d, i) { return yScale(i); };
+            yText = function (d, i) { return y(d, i) + yScale.rangeBand() / 2; };
+            x = d3.scale.linear().domain([0, d3.max(aggregatedData, barValue)]).range([0, maxBarWidth]);
+            // svg container element
+            chart = svg
+             .attr('width', maxBarWidth + barLabelWidth + valueLabelWidth)
+             .attr('height', gridLabelHeight + gridChartOffset + aggregatedData.length * barHeight);
+
+            // char   chart.remove('g') 
+            gridContainer = chart.append('g')
+
+
+            gridContainer
+                           .selectAll("text").data(x.ticks(10)).enter().append("text")
+             .attr("x", x)
+             .attr("dy", -3)
+             .attr("text-anchor", "middle")
+             .text(String);
+            // vertical grid lines
+            gridContainer
+                            .selectAll("line").data(x.ticks(10)).enter().append("line")
+              .attr("x1", x)
+              .attr("x2", x)
+              .attr("y1", 0)
+              .attr("y2", yScale.rangeExtent()[1] + gridChartOffset)
+              .style("stroke", "#ccc");
+            // bar labels
+            labelsContainer = chart.append('g')
+              .attr('transform', 'translate(' + (barLabelWidth - barLabelPadding) + ',' + (gridLabelHeight + gridChartOffset) + ')');
+            labelsContainer.selectAll('text').data(aggregatedData).enter().append('text')
+              .attr('y', yText)
+              .attr('stroke', 'none')
+              .attr('fill', 'white')
+              .attr("dy", ".35em") // vertical-align: middle
+              .attr('text-anchor', 'end')
+              .text(barLabel);
+            // bars
+
+            barsContainer = chart.append('g')
+             .attr('transform', 'translate(' + barLabelWidth + ',' + (gridLabelHeight + gridChartOffset) + ')');
+            barsContainer.selectAll("rect").data(aggregatedData).enter().append("rect")
+              .attr('y', y)
+              .attr('height', yScale.rangeBand())
+              .attr('width', function (d) { return x(barValue(d)); })
+              .attr('stroke', 'white')
+              .attr('fill', 'darkcyan')
+            // bar value labels
+            barsContainer.selectAll("text").data(aggregatedData).enter().append("text")
+              .attr("x", function (d) { return x(barValue(d)); })
+              .attr("y", yText)
+              .attr("dx", 3) // padding-left
+              .attr("dy", ".35em") // vertical-align: middle
+              .attr("text-anchor", "start") // text-align: right
+              .attr("fill", "white")
+              .attr("stroke", "none")
+              .text(function (d) { return d3.round(barValue(d), 2); });
+
+            barsContainer.transition().duration(duration).delay(1000);
+
+            // start line
+            barsContainer.append("line")
+              .attr("y1", -gridChartOffset)
+              .attr("y2", yScale.rangeExtent()[1] + gridChartOffset)
+              .style("stroke", "#000");
+            /** Any data change will update this directive this watch is for change for responsive data ***/
+
+
+        })
+
+
+
+
+    }
+
+    return {
+        link: link,
+        restrict: 'E',
+        scope: { data: '=', color: '=' }
+
+
+    }
+
+
+
+
+}]);
